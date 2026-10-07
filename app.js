@@ -68,7 +68,8 @@
     dDebt: '0', dFuneral: '8,300', dCharity: '0',
     dHealthcare: '0', dLoved: '0', dFuture: '0', dBonus: '0',
     dSavings: '0', dIndividual: '0', dGroup: '0', dOther: '0', dResult: null,
-    cmpA: 0, cmpB: 1
+    cmpA: 0, cmpB: 1,
+    allCarriers: false, openCarrier: null
   };
 
   /* ---- helpers ported verbatim ---- */
@@ -280,8 +281,7 @@ function setText(el, v) {
   /* ======================= 4 · ACTIONS ==================================== */
   function scrollToCalc() {
     setTimeout(function () {
-      // the [hidden] attr lives on the data-if WRAPPER, so test real visibility
-      var el = $$('[data-calc-panel]').filter(function (p) { return p.checkVisibility ? p.checkVisibility() : p.offsetParent; })[0];
+      var el = $('[data-calc-panel]:not([hidden]) , [data-if="showSimple"]:not([hidden]), [data-if="showDetailed"]:not([hidden])');
       if (!el) return;
       var top = el.getBoundingClientRect().top + window.scrollY - 16;
       window.scrollTo({ top: top, behavior: reduced() ? 'auto' : 'smooth' });
@@ -354,6 +354,110 @@ function setText(el, v) {
     onDGroup: currency('dGroup'), onDOther: currency('dOther'),
     dismissSticky: function () { S.stickyDismissed = true; S.sticky = false; render(); }
   };
+
+/* ---- company directory ---------------------------------------------------
+   Two captured variants share one state:
+     desktop  [data-dirvariant="desktop"]  3 nodes: link list · toggle · trust
+     mobile   [data-dirvariant="mobile"]   2 nodes: accordion+toggle · trust
+   matchMedia(640px) decides which set is shown; "Show all 11 companies"
+   expands either (6 rows default on desktop, 5 on mobile). Mobile rows
+   open an inline panel cloned from #carrier-panel-tpl.                  */
+var DIR = { desktop: null, mobile: null, mq: null };
+
+function initDirectory() {
+  ['desktop', 'mobile'].forEach(function (kind) {
+    var nodes = $$('[data-dirvariant="' + kind + '"]');
+    if (!nodes.length) return;
+    var host = null, btns = [];
+    nodes.forEach(function (n) {
+      if (!host) host = (n.matches && n.matches('[data-dirlist],[data-dirmobile]')) ? n
+                      : n.querySelector('[data-dirlist],[data-dirmobile]');
+      if (n.tagName === 'BUTTON') btns.push(n);
+      btns = btns.concat($$('button', n));
+    });
+    var rows = host
+      ? $$(':scope > *', host).filter(function (r) {
+          return kind === 'desktop' ? !!r.querySelector('img')
+                                    : !!r.querySelector('button[data-idx]');
+        })
+      : [];
+    var v = { kind: kind, nodes: nodes, rows: rows,
+              limit: kind === 'desktop' ? 6 : 5,
+              toggle: btns.filter(function (b) { return /Show (all|fewer)/.test(b.textContent); })[0] };
+    DIR[kind] = v;
+    if (v.toggle) v.toggle.addEventListener('click', function () {
+      S.allCarriers = !S.allCarriers;
+      renderDirectory();
+    });
+    if (kind === 'mobile') rows.forEach(function (row) {
+      var btn = row.querySelector('button[data-idx]');
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.getAttribute('data-idx'), 10);
+        S.openCarrier = S.openCarrier === idx ? null : idx;
+        renderDirectory();
+      });
+    });
+  });
+  DIR.mq = window.matchMedia('(max-width: 640px)');
+  var onMq = function () { renderDirectory(); };
+  if (DIR.mq.addEventListener) DIR.mq.addEventListener('change', onMq);
+  else DIR.mq.addListener(onMq);
+  renderDirectory();
+}
+
+function renderDirectory() {
+  var mobile = DIR.mq && DIR.mq.matches;
+  ['desktop', 'mobile'].forEach(function (kind) {
+    var v = DIR[kind];
+    if (!v) return;
+    var active = (kind === 'mobile') === mobile;
+    v.nodes.forEach(function (n) {
+      if (active) n.removeAttribute('hidden'); else n.setAttribute('hidden', '');
+    });
+    v.rows.forEach(function (row, i) {
+      row.style.display = (S.allCarriers || i < v.limit) ? '' : 'none';
+      if (kind !== 'mobile') return;
+      var btn = row.querySelector('button[data-idx]');
+      var open = S.openCarrier === i;
+      btn.setAttribute('aria-expanded', String(open));
+      btn.style.background = open ? 'rgb(245, 249, 255)' : 'rgb(255, 255, 255)';
+      var chevBox = btn.querySelector('svg') && btn.querySelector('svg').parentElement;
+      if (chevBox) chevBox.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+      var panel = row.querySelector('[id^="carrier-panel-"]');
+      if (open && !panel) row.appendChild(buildPanel(row, i));
+      else if (!open && panel) panel.remove();
+    });
+    if (v.toggle) {
+      setText(v.toggle, S.allCarriers ? 'Show fewer companies'
+                                      : 'Show all ' + v.rows.length + ' companies');
+      v.toggle.setAttribute('aria-expanded', String(S.allCarriers));
+    }
+  });
+}
+
+// Accordion panel, cloned from the captured template; texts/links swapped.
+function buildPanel(row, i) {
+  var tpl = document.getElementById('carrier-panel-tpl');
+  var el = tpl.content.firstElementChild.cloneNode(true);
+  var btn = row.querySelector('button[data-idx]');
+  var spans = btn.querySelectorAll('span span');
+  var name = spans[0] ? spans[0].textContent.trim() : '';
+  var best = spans[1] ? spans[1].textContent.replace(/^Best for\s*/i, '').trim() : '';
+  var rating = (btn.textContent.match(/(\d\.\d)/) || [,''])[1];
+  el.id = 'carrier-panel-' + i;
+  btn.setAttribute('aria-controls', el.id);
+  var strongEl = el.querySelector('strong');
+  if (strongEl) strongEl.textContent = best;
+  var a = el.querySelector('a');
+  var slug = { 'New York Life': 'new-york-life', 'Northwestern Mutual': 'northwestern-mutual',
+    'USAA': 'usaa', 'MassMutual': 'massmutual', 'Nationwide': 'nationwide',
+    'Mutual of Omaha': 'mutual-of-omaha', 'Guardian': 'guardian', 'State Farm': 'state-farm',
+    'Pacific Life': 'pacific-life', 'Protective': 'protective', 'Ethos': 'ethos-review' }[name];
+  if (slug) a.setAttribute('href', 'https://www.usnews.com/insurance/life-insurance/' + slug);
+  a.setAttribute('aria-label', 'Read our ' + name + ' life insurance review. Rated ' + rating + ' out of 5');
+  a.setAttribute('data-analytics', 'D|directory-m|' + (i + 1) + '|' + name);
+  return el;
+}
 
   /* ======================= 5 · PAGE EFFECTS =============================== */
   // Generic hover/focus engine — replays the prototype runtime's inline-style
@@ -455,7 +559,7 @@ function setText(el, v) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var existing = $('[data-tippanel]');
-        if (existing) { existing.remove(); btn.setAttribute('aria-expanded', 'false'); return; }
+        if (existing) { existing.remove(); return; }
         var label = btn.getAttribute('aria-label') || '';
         var key = Object.keys(DEFINITIONS).filter(function (k) {
           return label.indexOf(DEFINITIONS[k].term) !== -1;
@@ -466,8 +570,6 @@ function setText(el, v) {
         tip.setAttribute('data-tippanel', '1');
         tip.setAttribute('role', 'note');
         tip.style.cssText = 'position:absolute;z-index:1000;left:50%;transform:translateX(-50%);bottom:calc(100% + 8px);width:240px;background:#1A1D26;color:#fff;border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.5;text-align:left;box-shadow:0 8px 24px rgba(8,19,36,0.25)';
-        // innerHTML is safe here: d comes only from the static DEFINITIONS
-        // literals above — no user or stored data ever reaches this sink.
         tip.innerHTML = '<strong style="display:block;margin-bottom:4px">' + d.term + '</strong>' + d.body;
         var host = btn.parentElement;
         host.style.position = 'relative';
@@ -475,17 +577,12 @@ function setText(el, v) {
         btn.setAttribute('aria-expanded', 'true');
       });
     });
-    function closeTip() {
-      var t = $('[data-tippanel]');
-      if (!t) return;
-      t.remove();
-      $$('button[aria-label^="What does"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
-    }
     document.addEventListener('click', function (e) {
-      if (!e.target.closest('[role="note"]')) closeTip();
+      var t = $('[data-tippanel]');
+      if (t && !e.target.closest('[role="note"]')) t.remove();
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeTip();
+      if (e.key === 'Escape') { var t = $('[data-tippanel]'); if (t) t.remove(); }
     });
   }
 
@@ -494,6 +591,7 @@ function setText(el, v) {
     S.ctx = loadContext();
     captureTabStyles();
     initCostsRefs();
+    initDirectory();
 
     // delegate all data-action hooks
     document.addEventListener('click', function (e) {
@@ -541,11 +639,7 @@ if (fullBtn)   fullBtn.addEventListener('click', ACTIONS.selectDetailed);
     });
     // mobile burger
     var burger = $('[data-burger]') || $('button[aria-label="Menu"], button[aria-label="Open menu"]');
-    if (burger) burger.addEventListener('click', function () {
-      S.menuOpen = !S.menuOpen;
-      burger.setAttribute('aria-expanded', String(S.menuOpen));
-      render();
-    });
+    if (burger) burger.addEventListener('click', function () { S.menuOpen = !S.menuOpen; render(); });
     // compare selects
     var sels = $$('select[aria-label^="First policy"], select[aria-label^="Second policy"]');
     if (sels[0]) sels[0].addEventListener('change', function () {

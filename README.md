@@ -66,6 +66,27 @@ interactions.
 - The cost-table source line still reads `[Source name] / [Month Year]`.
 - Education presets are College Board 2022–23 totals, as designed.
 
+## Post-testing updates (round 2 fixes, v2)
+
+Applied from the final design revision and verified pixel-identical to it
+(identical computed-style hash, byte-identical visible text at 1280px):
+
+1. "No company can pay for placement in our rankings." under the company
+   directory (both variants).
+2. Companies ordered by U.S. News rating, highest first (4.6 → 3.6).
+3. Mobile: jump-bar "Get quote" is a red **outline** pill; the hero button
+   stays solid red (outline version was tried and reverted in testing).
+4. "How we rate" and "Companies we've reviewed" merged into one connected
+   card; duplicate factor line removed; desktop shows 6 companies by
+   default with "Show all 11 companies", mobile shows 5 (accordion rows).
+5. Coverage note under the cost table ("Smaller policies typically cost
+   less…"). Cost tables stay fixed at $1M — term 35/45/55/65, whole
+   30/40/50/60/70 — no placeholders anywhere.
+
+The directory ships as **two captured variants** (`data-dirvariant`,
+desktop link-list / mobile accordion) toggled by `matchMedia(640px)` in
+app.js — same mechanism the prototype runtime used.
+
 ## Known micro-differences from the prototype runtime
 
 - The "saved estimate" pill's check icon is an inline SVG equivalent of the

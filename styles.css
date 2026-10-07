@@ -189,3 +189,7 @@ h1,h2,h3,h4,p,li,a,span{overflow-wrap:break-word}
 
 /* cost-section tab switch: beats the !important responsive rules above */
 [data-termtable][data-off], [data-termcards][data-off] { display: none !important; }
+
+/* directory variant nodes are swapped by app.js via [hidden] */
+[data-dirvariant][hidden] { display: none !important; }
+[data-dirvariant][hidden] { display: none !important; }

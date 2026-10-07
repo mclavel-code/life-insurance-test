@@ -402,6 +402,10 @@ function initDirectory() {
   var onMq = function () { renderDirectory(); };
   if (DIR.mq.addEventListener) DIR.mq.addEventListener('change', onMq);
   else DIR.mq.addListener(onMq);
+  // Also drive the swap from resize: some embedded/preview browsers never
+  // deliver the media-query change event, which would otherwise leave the
+  // wrong variant on screen after a viewport change.
+  window.addEventListener('resize', onMq);
   renderDirectory();
 }
 
